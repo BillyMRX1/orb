@@ -6,7 +6,7 @@ A small visualization of how people used to picture the solar system, and how th
 
 It's three plain HTML files drawn with Canvas. No frameworks, no build, no dependencies. Black ink on a white background and some slowly moving circles.
 
-**[Open the live visualization](index.html)**
+**[Open the live visualization](https://billymrx1.github.io/orb/)**
 
 ## Why I made this
 
