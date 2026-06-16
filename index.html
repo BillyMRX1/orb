@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Geocentric &harr; Heliocentric</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fff;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+      #caption {
+        position: fixed;
+        top: max(16px, env(safe-area-inset-top));
+        left: 0;
+        width: 100%;
+        text-align: center;
+        font: 600 15px sans-serif;
+        color: #000;
+        letter-spacing: 1px;
+        pointer-events: none;
+      }
+      #controls {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: max(20px, env(safe-area-inset-bottom));
+        display: flex;
+        gap: 14px;
+        z-index: 10;
+      }
+      #controls button {
+        width: 52px;
+        height: 52px;
+        border: 2px solid #000;
+        border-radius: 50%;
+        background: #fff;
+        color: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      #controls button:active {
+        background: #000;
+        color: #fff;
+      }
+      #controls button svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+      #controls button.active {
+        background: #000;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="sky"></canvas>
+    <div id="caption"></div>
+    <div id="controls">
+      <button id="btnPlay" aria-label="Play" title="Play">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+      </button>
+      <button id="btnPause" aria-label="Pause" title="Pause">
+        <svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+      </button>
+      <button id="btnReset" aria-label="Reset" title="Reset">
+        <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
+      </button>
+    </div>
+    <script>
+      const canvas = document.getElementById("sky");
+      const ctx = canvas.getContext("2d");
+      const caption = document.getElementById("caption");
+
+      const DESIGN_RADIUS = 410;
+
+      let cx, cy, scale;
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = window.innerWidth,
+          h = window.innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cx = w / 2;
+        cy = h / 2;
+        scale = Math.min(w, h) / 2 / DESIGN_RADIUS;
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      // ---- Timeline (seconds) ----
+      const T_DISPLAY = 28; // show a model
+      const T_TRANS = 2; // morph between models
+      const HALF = T_DISPLAY + T_TRANS; // 30
+      const CYCLE = HALF * 2; // 60
+      const SPEED = 1.2; // clock units per second of display (faster planets)
+
+      const bodies = [
+        {
+          label: "T",
+          size: 13,
+          geoCenter: true,
+          helio: { r: 160, speed: 0.9 },
+        }, // Earth
+        {
+          label: "S",
+          size: 14,
+          helioCenter: true,
+          geo: { def: 175, epi: 0, defSpeed: 0.9, epiSpeed: 0 },
+        }, // Sun
+        {
+          label: "",
+          size: 5,
+          geo: { def: 70, epi: 22, defSpeed: 1.6, epiSpeed: 5.2 },
+          helio: { r: 70, speed: 1.6 },
+        }, // Mercury
+        {
+          label: "",
+          size: 7,
+          geo: { def: 120, epi: 34, defSpeed: 1.2, epiSpeed: 4.0 },
+          helio: { r: 110, speed: 1.2 },
+        }, // Venus
+        {
+          label: "",
+          size: 7,
+          geo: { def: 235, epi: 40, defSpeed: 0.6, epiSpeed: 2.6 },
+          helio: { r: 220, speed: 0.6 },
+        }, // Mars
+        {
+          label: "",
+          size: 9,
+          geo: { def: 300, epi: 30, defSpeed: 0.35, epiSpeed: 2.2 },
+          helio: { r: 290, speed: 0.35 },
+        }, // Jupiter
+        {
+          label: "",
+          size: 8,
+          geo: { def: 365, epi: 24, defSpeed: 0.22, epiSpeed: 2.0 },
+          helio: { r: 360, speed: 0.22 },
+        }, // Saturn
+      ];
+
+      function geoPos(b, clock) {
+        if (b.geoCenter) return [cx, cy];
+        const g = b.geo;
+        const dx = cx + g.def * scale * Math.cos(clock * g.defSpeed);
+        const dy = cy + g.def * scale * Math.sin(clock * g.defSpeed);
+        return [
+          dx + g.epi * scale * Math.cos(clock * g.epiSpeed),
+          dy + g.epi * scale * Math.sin(clock * g.epiSpeed),
+        ];
+      }
+
+      function helioPos(b, clock) {
+        if (b.helioCenter) return [cx, cy];
+        const h = b.helio;
+        return [
+          cx + h.r * scale * Math.cos(clock * h.speed),
+          cy + h.r * scale * Math.sin(clock * h.speed),
+        ];
+      }
+
+      const ease = (p) => p * p * (3 - 2 * p);
+
+      let trails = bodies.map(() => []);
+      let lastMode = null;
+      window.addEventListener("resize", () => {
+        trails = bodies.map(() => []);
+      });
+
+      function phaseInfo(t) {
+        const x = t % CYCLE;
+        if (x < T_DISPLAY) return { mode: "geo", local: x };
+        if (x < HALF) return { mode: "toHelio", p: (x - T_DISPLAY) / T_TRANS };
+        if (x < HALF + T_DISPLAY) return { mode: "helio", local: x - HALF };
+        return { mode: "toGeo", p: (x - HALF - T_DISPLAY) / T_TRANS };
+      }
+
+      function drawTrails(fraction, alpha) {
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.lineWidth = 1;
+        for (const pts of trails) {
+          const n = Math.floor(pts.length * fraction);
+          if (n < 2) continue;
+          ctx.beginPath();
+          ctx.moveTo(pts[0][0], pts[0][1]);
+          for (let i = 1; i < n; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawBody([x, y], b) {
+        const s = Math.max(0.55, scale);
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, b.size * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (b.label) {
+          ctx.fillStyle = "#000";
+          ctx.font =
+            "bold " + Math.max(8, Math.round(13 * s)) + "px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(b.label, x, y);
+        }
+      }
+
+      let elapsed = 0;
+      let playing = true;
+      let lastNow = null;
+
+      function draw(now) {
+        if (lastNow === null) lastNow = now;
+        const dt = (now - lastNow) / 1000;
+        lastNow = now;
+        if (playing) elapsed += dt;
+
+        const t = elapsed;
+        const clock = t * SPEED;
+        const info = phaseInfo(t);
+
+        if (info.mode !== lastMode) {
+          if (info.mode === "geo" || info.mode === "helio") {
+            trails = bodies.map(() => []);
+          }
+          lastMode = info.mode;
+        }
+
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, cx * 2, cy * 2);
+
+        if (info.mode === "geo" || info.mode === "helio") {
+          const isGeo = info.mode === "geo";
+          caption.textContent = isGeo ? "Geocentric" : "Heliocentric";
+          const positions = bodies.map((b) =>
+            isGeo ? geoPos(b, clock) : helioPos(b, clock),
+          );
+          bodies.forEach((b, i) => trails[i].push(positions[i]));
+          drawTrails(1, 1);
+          bodies.forEach((b, i) => drawBody(positions[i], b));
+        } else {
+          const p = ease(info.p);
+          drawTrails(1 - info.p, 1 - info.p);
+          const toHelio = info.mode === "toHelio";
+          caption.textContent = toHelio
+            ? "Geocentric → Heliocentric"
+            : "Heliocentric → Geocentric";
+          bodies.forEach((b) => {
+            const from = toHelio ? geoPos(b, clock) : helioPos(b, clock);
+            const to = toHelio ? helioPos(b, clock) : geoPos(b, clock);
+            drawBody(
+              [
+                from[0] + (to[0] - from[0]) * p,
+                from[1] + (to[1] - from[1]) * p,
+              ],
+              b,
+            );
+          });
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      const btnPlay = document.getElementById("btnPlay");
+      const btnPause = document.getElementById("btnPause");
+      const btnReset = document.getElementById("btnReset");
+
+      function reflect() {
+        btnPlay.classList.toggle("active", playing);
+        btnPause.classList.toggle("active", !playing);
+      }
+      btnPlay.addEventListener("click", () => {
+        playing = true;
+        reflect();
+      });
+      btnPause.addEventListener("click", () => {
+        playing = false;
+        reflect();
+      });
+      btnReset.addEventListener("click", () => {
+        elapsed = 0;
+        trails = bodies.map(() => []);
+        lastMode = null;
+        playing = true;
+        reflect();
+      });
+      reflect();
+
+      requestAnimationFrame(draw);
+    </script>
+  </body>
+</html>

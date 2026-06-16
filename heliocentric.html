@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Heliocentric Model</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fff;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="sky"></canvas>
+    <script>
+      const canvas = document.getElementById("sky");
+      const ctx = canvas.getContext("2d");
+
+      const DESIGN_RADIUS = 400;
+
+      let cx, cy, scale;
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = window.innerWidth,
+          h = window.innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cx = w / 2;
+        cy = h / 2;
+        scale = Math.min(w, h) / 2 / DESIGN_RADIUS;
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      // Planets orbiting the Sun (S). Earth is labeled T.
+      const bodies = [
+        { r: 70, size: 6, speed: 1.6, label: "" }, // Mercury
+        { r: 110, size: 8, speed: 1.2, label: "" }, // Venus
+        { r: 160, size: 9, speed: 0.9, label: "T" }, // Earth
+        { r: 220, size: 8, speed: 0.6, label: "" }, // Mars
+        { r: 290, size: 11, speed: 0.35, label: "" }, // Jupiter
+        { r: 360, size: 10, speed: 0.22, label: "" }, // Saturn
+      ];
+
+      let trails = bodies.map(() => []);
+      const MAX_TRAIL = 6000;
+      window.addEventListener("resize", () => {
+        trails = bodies.map(() => []);
+      });
+
+      let t = 0;
+
+      function draw() {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, cx * 2, cy * 2);
+
+        const s = Math.max(0.55, scale);
+
+        ctx.strokeStyle = "rgba(0,0,0,0.45)";
+        ctx.lineWidth = 1;
+        for (const pts of trails) {
+          if (pts.length < 2) continue;
+          ctx.beginPath();
+          ctx.moveTo(pts[0][0], pts[0][1]);
+          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+          ctx.stroke();
+        }
+
+        // Sun (S) at center
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 16 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        label("S", cx, cy, s);
+
+        bodies.forEach((b, idx) => {
+          const angle = t * b.speed;
+          const x = cx + b.r * scale * Math.cos(angle);
+          const y = cy + b.r * scale * Math.sin(angle);
+
+          if (trails[idx].length < MAX_TRAIL) trails[idx].push([x, y]);
+
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, b.size * s, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          if (b.label) label(b.label, x, y, s);
+        });
+
+        t += 0.02;
+        requestAnimationFrame(draw);
+      }
+
+      function label(text, x, y, s) {
+        ctx.fillStyle = "#000";
+        ctx.font =
+          "bold " + Math.max(8, Math.round(13 * (s || 1))) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, x, y);
+      }
+
+      draw();
+    </script>
+  </body>
+</html>
